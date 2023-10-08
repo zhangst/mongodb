@@ -35,6 +35,21 @@ validate_certificate() {
     ca_crt="$1"
     server_crt="$2"
     min_validity_days="$3"
+
+    # Verify certificate content
+    if grep -q 'PRIVATE KEY' "$server_crt" && grep -q 'PRIVATE KEY' "$server_crt"; then
+        log_verification_result "$server_crt RSA PRIVATE KEY" "Passed"
+    else
+        log_verification_result "$server_crt RSA PRIVATE KEY" "Failed: don't have private key"
+        exit 1
+    fi
+    
+    if grep -q 'BEGIN CERTIFICATE' "$server_crt" && grep -q 'END CERTIFICATE' "$server_crt"; then
+        log_verification_result "$server_crt CERTIFICATE" "Passed"
+    else
+        log_verification_result "$server_crt CERTIFICATE" "Failed: don't have certificate"
+        exit 1
+    fi
     
     # Verify certificate chain
     verify_result=$(openssl verify -CAfile "$ca_crt" "$server_crt" 2>&1)
