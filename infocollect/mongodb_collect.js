@@ -8,8 +8,31 @@
     try {
         const serverStatus = adminDb.runCommand({ serverStatus: 1 });
         const cmdLine = adminDb.runCommand({ getCmdLineOpts: 1 });
+        
+        let storageEngineName = 'unknown';
+
+        // ***** FIX: New dual-check logic for Storage Engine *****
+        // Primary Method: Check serverStatus directly (works best for replica sets)
+        if (serverStatus.storageEngine && serverStatus.storageEngine.name) {
+            storageEngineName = serverStatus.storageEngine.name;
+        } 
+        // Fallback Method: Check collection stats (more reliable on mongos)
+        else {
+            try {
+                const configDb = db.getSiblingDB('config');
+                // Check stats on a reliable collection in the config db.
+                const stats = configDb.collections.stats(); 
+                if (stats && stats.hasOwnProperty('wiredTiger')) {
+                    storageEngineName = 'wiredTiger';
+                }
+            } catch (e) {
+                // If fallback also fails, log it but continue
+                console.error(`// Could not determine storage engine via fallback: ${e}`);
+            }
+        }
+
         let hasZones = false;
-        let isBalancerRunning = false;
+        let isBalancerRunning = false; 
 
         if (serverStatus.process === 'mongos') {
             const configDb = db.getSiblingDB('config');
@@ -23,8 +46,7 @@
             section: "cluster_info",
             output: {
                 version: serverStatus.version,
-                // ***** FIX: Safely access storage engine name *****
-                storageEngine: (serverStatus.storageEngine && serverStatus.storageEngine.name) ? serverStatus.storageEngine.name : 'unknown',
+                storageEngine: storageEngineName,
                 hasZones: hasZones,
                 isBalancerRunning: isBalancerRunning,
                 cmdLine: cmdLine.parsed,
@@ -32,8 +54,6 @@
             }
         });
     } catch (e) {
-        // ***** FIX: Log errors to stderr instead of printing to stdout *****
-        // This prevents breaking the JSON output if an error occurs.
         console.error(`// Could not fetch cluster info: ${e}`);
     }
 
