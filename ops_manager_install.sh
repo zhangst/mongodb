@@ -10,10 +10,10 @@ sudo yum install -y wget
 cat <<EOF | sudo tee /etc/yum.repos.d/mongodb-org-6.0.repo
 [mongodb-org-6.0]
 name=MongoDB Repository
-baseurl=https://repo.mongodb.org/yum/amazon/2/mongodb-org/6.0/x86_64/
+baseurl=https://repo.mongodb.org/yum/redhat/8/mongodb-org/6.0/x86_64/
 gpgcheck=1
 enabled=1
-gpgkey=https://www.mongodb.org/static/pgp/server-6.0.asc
+gpgkey=https://pgp.mongodb.com/server-6.0.asc
 EOF
 
 sudo yum install -y mongodb-org mongodb-mongosh
@@ -36,8 +36,6 @@ systemLog:
 # Where and how to store data.
 storage:
   dbPath: /data/appdb/node1/db/
-  journal:
-    enabled: true
 
 processManagement:
   fork: true  # fork and run in background
@@ -45,7 +43,7 @@ processManagement:
   timeZoneInfo: /usr/share/zoneinfo
 
 net:
-  port: 27017
+  port: 37017
   bindIp: 0.0.0.0
   bindIpAll: true
 
@@ -68,8 +66,6 @@ systemLog:
 # Where and how to store data.
 storage:
   dbPath: /data/appdb/node2/db/
-  journal:
-    enabled: true
 
 processManagement:
   fork: true  # fork and run in background
@@ -77,7 +73,7 @@ processManagement:
   timeZoneInfo: /usr/share/zoneinfo
 
 net:
-  port: 27018
+  port: 37018
   bindIp: 0.0.0.0
   bindIpAll: true
 
@@ -99,8 +95,6 @@ systemLog:
 # Where and how to store data.
 storage:
   dbPath: /data/appdb/node3/db/
-  journal:
-    enabled: true
 
 processManagement:
   fork: true  # fork and run in background
@@ -108,7 +102,7 @@ processManagement:
   timeZoneInfo: /usr/share/zoneinfo
 
 net:
-  port: 27019
+  port: 37019
   bindIp: 0.0.0.0
   bindIpAll: true
 
@@ -131,27 +125,29 @@ sudo -u mongod mongod -f /data/appdb/node3/conf/mongod.conf
 sleep 10
 
 
-mongosh --quiet --eval "rs.initiate({_id: \"mgappdb\", version: 1, members: [{ _id: 0, host : \"localhost:27017\" },{ _id: 1, host : \"localhost:27018\" },{ _id: 2, host : \"localhost:27019\" }]})"
+mongosh --port=37017 --quiet --eval "rs.initiate({_id: \"mgappdb\", version: 1, members: [{ _id: 0, host : \"localhost:37017\" },{ _id: 1, host : \"localhost:37018\" },{ _id: 2, host : \"localhost:37019\" }]})"
 
 
 sleep 15
 
-mongosh "mongodb://127.0.0.1:27017/admin" --quiet --eval "db.createUser({user:'root', pwd:'opsmanager', roles:[{db:'admin',role:'root'}]})"
-# mongosh "mongodb://root:opsmanager@127.0.0.1:27017/admin"
+mongosh "mongodb://127.0.0.1:37017/admin" --quiet --eval "db.createUser({user:'root', pwd:'opsmanager', roles:[{db:'admin',role:'root'}]})"
+# mongosh "mongodb://root:opsmanager@127.0.0.1:37017/admin"
 
 
-mongosh -u root -p opsmanager --eval "db.createUser({ user: 'opsManager', pwd: 'passwordone', roles: [ { role: 'readWriteAnyDatabase', db: 'admin' }, { role: 'dbAdminAnyDatabase', db: 'admin' }, { role: 'clusterAdmin', db: 'admin' }, { role: 'clusterMonitor', db: 'admin' } ]})" admin
+mongosh --port=37017 -u root -p opsmanager --eval "db.createUser({ user: 'opsManager', pwd: 'passwordone', roles: [ { role: 'readWriteAnyDatabase', db: 'admin' }, { role: 'dbAdminAnyDatabase', db: 'admin' }, { role: 'clusterAdmin', db: 'admin' }, { role: 'clusterMonitor', db: 'admin' } ]})" admin
 
 
 
 
 # install opsmanager
-wget https://downloads.mongodb.com/on-prem-mms/rpm/mongodb-mms-6.0.7.100.20221129T1435Z.x86_64.rpm
-sudo rpm -ivh mongodb-mms-6.0.7.100.20221129T1435Z.x86_64.rpm
+# wget https://downloads.mongodb.com/on-prem-mms/rpm/mongodb-mms-6.0.7.100.20221129T1435Z.x86_64.rpm
+# sudo rpm -ivh mongodb-mms-6.0.7.100.20221129T1435Z.x86_64.rpm
+wget https://downloads.mongodb.com/on-prem-mms/rpm/mongodb-mms-7.0.10.500.20240731T2149Z.x86_64.rpm
+sudo rpm -ivh mongodb-mms-7.0.10.500.20240731T2149Z.x86_64.rpm
 
 
 cat << ENDCONF | sudo tee /opt/mongodb/mms/conf/conf-mms.properties
-mongo.mongoUri=mongodb://opsManager:passwordone@127.0.0.1:27017,127.0.0.1:27018,127.0.0.1:27019/?maxPoolSize=150&retryWrites=false&retryReads=false
+mongo.mongoUri=mongodb://opsManager:passwordone@127.0.0.1:37017,127.0.0.1:37018,127.0.0.1:37019/admin?maxPoolSize=150&retryWrites=false&retryReads=false
 mongo.encryptedCredentials=false
 mongo.ssl=false
 ENDCONF
