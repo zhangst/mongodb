@@ -1,3 +1,5 @@
+// mongosh --quiet  "mongodb+srv://<user>:<password>@url.mongodb.net/" mongodb_collect.js  > mongodb_collect.json
+
 (function() {
     'use strict';
 
