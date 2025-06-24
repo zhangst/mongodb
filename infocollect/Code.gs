@@ -42,7 +42,10 @@ function generalInfo(results) {
 
   const summary = results.limitationsSummary;
   const summaryHeader = [["MongoSync Limitation Summary", "Detected?"]];
+  
+  // ***** ADD: "Balancer Running" check to the summary table *****
   const summaryData = [
+    ["Balancer Running", summary.isBalancerRunning ? "Yes" : "No"],
     ["Timeseries Collections", summary.hasTimeseries ? "Yes" : "No"],
     ["Non-WiredTiger Engine", summary.isNotWiredTiger ? "Yes" : "No"],
     ["Sharding Zones Configured", summary.hasZones ? "Yes" : "No"],
@@ -58,6 +61,7 @@ function generalInfo(results) {
   sheet.getRange(startRow, 1, 1, 2).setValues(summaryHeader).setFontWeight("bold");
   sheet.getRange(startRow + 1, 1, summaryData.length, 2).setValues(summaryData).setHorizontalAlignment("left");
   
+  // 现有的高亮逻辑会自动处理新增的行
   for (let i = 0; i < summaryData.length; i++) {
     const cell = sheet.getRange(startRow + 1 + i, 2);
     if (summaryData[i][1] === "Yes") {
@@ -75,7 +79,6 @@ function collectionSheet(results) {
   sheet.clear();
   if(results.collections.length === 0) { sheet.appendRow(["No collections found."]); return; }
 
-  // ***** Add "Is Sharded" to header *****
   const header = [
       "Namespace", "Count", "Data Size (MB)", "Storage Size (MB)",
       "Type", "Is Sharded", "Timeseries", "Clustered", "Capped", "View", 
@@ -84,7 +87,6 @@ function collectionSheet(results) {
   sheet.appendRow(header);
   sheet.getRange(1, 1, 1, header.length).setFontWeight("bold").setBackground("#d9ead3");
 
-  // ***** Add c.isSharded to row data *****
   const rows = results.collections.map(c => [
      c.ns, c.count, c.size / (1024*1024), c.storageSize / (1024*1024),
      c.type, c.isSharded ? "Yes" : "No", c.isTimeseries ? "Yes" : "No", 
@@ -97,7 +99,6 @@ function collectionSheet(results) {
     sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, header.length).setValues(rows);
     
     const rules = sheet.getConditionalFormatRules();
-    // Limitation columns to highlight (Column F "Is Sharded" is skipped)
     const limitationColumns = [7, 8, 9, 10, 11, 12, 13, 14]; 
     limitationColumns.forEach(col => {
       rules.push(SpreadsheetApp.newConditionalFormatRule()
@@ -116,7 +117,6 @@ function indexSheet(results) {
   sheet.clear(); 
   if(results.indexes.length === 0) { sheet.appendRow(["No indexes found."]); return; }
   
-  // ***** Add "Empty Sort Field" to header *****
   const header = [
     "Namespace", "Index Name", "Size (MB)", "Accesses (Ops)",
     "Unique", "TTL", "Duplicate Key Conflict", "Empty Sort Field",
@@ -125,7 +125,6 @@ function indexSheet(results) {
   sheet.appendRow(header);
   sheet.getRange(1, 1, 1, header.length).setFontWeight("bold").setBackground("#d9ead3");
 
-  // ***** Add idx.hasEmptySort to row data *****
   const rows = results.indexes.map(idx => [
      idx.ns, idx.name, idx.size / (1024 * 1024), idx.accesses,
      idx.unique ? "Yes" : "No", idx.isTTL ? "Yes" : "No",
@@ -137,8 +136,7 @@ function indexSheet(results) {
     sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, header.length).setValues(rows);
 
     const rules = sheet.getConditionalFormatRules();
-    // Add new column (8) to the list of highlighted "Yes" columns
-    const yesColumns = [5, 6, 7, 8]; // E, F, G, H
+    const yesColumns = [5, 6, 7, 8];
     yesColumns.forEach(col => {
       rules.push(SpreadsheetApp.newConditionalFormatRule()
           .whenTextEqualTo("Yes").setBackground("red").setFontColor("white")

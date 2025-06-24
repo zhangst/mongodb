@@ -18,26 +18,35 @@
         const statusDiv = document.getElementById('output');
         statusDiv.textContent = `Reading file: ${file.name}...`;
         const reader = new FileReader();
+        
         reader.onload = function(e) {
-          try {
-            statusDiv.textContent = "File loaded. Analysing data...";
-            setTimeout(() => {
+          statusDiv.textContent = "File loaded. Analysing data...";
+          
+          // Use setTimeout to allow UI to update before heavy analysis
+          setTimeout(() => {
+            // ***** FIX: Moved the try...catch block inside setTimeout *****
+            try {
               const result = analyse(e.target.result);
               statusDiv.textContent = "Analysis finished. Writing results to spreadsheet...";
               google.script.run
                 .withSuccessHandler(() => google.script.host.close())
-                .withFailureHandler(onFailure)
+                .withFailureHandler(onFailure) // Handles errors from the server-side Apps Script
                 .addResults(result);
-            }, 50);
-          } catch (err) { onFailure(err); }
+            } catch (err) {
+              onFailure(err); // Now correctly handles errors from the client-side analyse() function
+            }
+          }, 50);
         };
+
         reader.onerror = function(err) { onFailure(new Error("Error reading the file.")); };
         reader.readAsText(file);
       };
     }
 
     function onFailure(error) {
-      document.getElementById('output').innerHTML = `<strong>ERROR:</strong> ${error.message}<br><pre>${error.stack || ''}</pre>`;
+      const div = document.getElementById('output');
+      div.innerHTML = `<strong>ERROR:</strong> ${error.message}<br><pre>${error.stack || ''}</pre>`;
+      document.getElementById('selectFiles').disabled = false;
     }
 
     function analyse(content) {
@@ -46,10 +55,10 @@
       const mongodb = { totalSize: 0, totalStorageSize: 0, totalIndexSize: 0 };
       
       const limitationsSummary = {
-          hasTimeseries: false, 
-          isNotWiredTiger: false, hasZones: false, hasQueryableEncryption: false,
-          hasClusteredWithTTL: false, hasDuplicateKeyConflict: false,
-          hasAtlasSearchIndex: false, hasDotInName: false, hasView: false
+          isBalancerRunning: false, hasTimeseries: false, isNotWiredTiger: false, 
+          hasZones: false, hasQueryableEncryption: false, hasClusteredWithTTL: false, 
+          hasDuplicateKeyConflict: false, hasAtlasSearchIndex: false, 
+          hasDotInName: false, hasView: false
       };
 
       data.forEach((section) => {
@@ -60,7 +69,7 @@
             mongodb.totalStorageSize += coll.storageSize || 0;
             mongodb.totalIndexSize += coll.totalIndexSize || 0;
             
-            if (coll.isTimeseries) limitationsSummary.hasTimeseries = true; 
+            if (coll.isTimeseries) limitationsSummary.hasTimeseries = true;
             if (coll.hasQueryableEncryption) limitationsSummary.hasQueryableEncryption = true;
             if (coll.isClusteredWithTTL) limitationsSummary.hasClusteredWithTTL = true;
             if (coll.hasAtlasSearchIndex) limitationsSummary.hasAtlasSearchIndex = true;
@@ -79,6 +88,7 @@
             Object.assign(mongodb, section.output);
             if (mongodb.storageEngine !== 'wiredTiger') limitationsSummary.isNotWiredTiger = true;
             if (mongodb.hasZones) limitationsSummary.hasZones = true;
+            if (mongodb.isBalancerRunning) limitationsSummary.isBalancerRunning = true;
         }
       });
 

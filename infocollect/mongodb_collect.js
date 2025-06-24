@@ -4,27 +4,38 @@
     const output = [];
     const adminDb = db.getSiblingDB('admin');
     
+    // --- Section 0: Cluster-wide Info ---
     try {
         const serverStatus = adminDb.runCommand({ serverStatus: 1 });
         const cmdLine = adminDb.runCommand({ getCmdLineOpts: 1 });
         let hasZones = false;
+        let isBalancerRunning = false;
+
         if (serverStatus.process === 'mongos') {
             const configDb = db.getSiblingDB('config');
             if (configDb.tags.countDocuments({}) > 0) {
                 hasZones = true;
             }
+            isBalancerRunning = sh.getBalancerState();
         }
+
         output.push({
             section: "cluster_info",
             output: {
                 version: serverStatus.version,
-                storageEngine: serverStatus.storageEngine.name,
+                // ***** FIX: Safely access storage engine name *****
+                storageEngine: (serverStatus.storageEngine && serverStatus.storageEngine.name) ? serverStatus.storageEngine.name : 'unknown',
                 hasZones: hasZones,
+                isBalancerRunning: isBalancerRunning,
                 cmdLine: cmdLine.parsed,
                 modules: JSON.stringify(serverStatus.modules)
             }
         });
-    } catch(e) {}
+    } catch (e) {
+        // ***** FIX: Log errors to stderr instead of printing to stdout *****
+        // This prevents breaking the JSON output if an error occurs.
+        console.error(`// Could not fetch cluster info: ${e}`);
+    }
 
     const databases = adminDb.runCommand({ listDatabases: 1 }).databases;
     const excludeDbs = ["admin", "local", "config"];
@@ -78,7 +89,6 @@
                         if (usageCursor.hasNext()) { indexUsage = usageCursor.next(); }
                     } catch (e) {}
 
-                    // ***** ADD LOGIC for Empty Sort Field *****
                     let hasEmptySort = false;
                     for (const field in index.key) {
                         if (index.key[field] === "") {
@@ -96,7 +106,7 @@
                             size: (stats.indexSizes && stats.indexSizes[index.name]) || 0,
                             accesses: Number((indexUsage.accesses && indexUsage.accesses.ops) || 0),
                             hasDuplicateKeyConflict: conflictingKeyStrings.has(keyString),
-                            hasEmptySort: hasEmptySort, // <-- Add hasEmptySort field
+                            hasEmptySort: hasEmptySort,
                             fullDefinition: JSON.stringify(index)
                         }
                     });
@@ -122,7 +132,7 @@
                     ns: `${dbName}.${collName}`, count: stats.count || 0, size: stats.size || 0,
                     storageSize: stats.storageSize || 0, totalIndexSize: stats.totalIndexSize || 0,
                     type: collInfo.type || 'collection',
-                    isSharded: stats.sharded || false, // <-- Add isSharded field
+                    isSharded: stats.sharded || false,
                     isTimeseries: collInfo.type === 'timeseries' || !!(collInfo.options && collInfo.options.timeseries),
                     isCapped: stats.capped || false, isClustered: isClustered, isView: collInfo.type === 'view', 
                     hasDotInName: dbName.includes('.') || collName.includes('.'),
