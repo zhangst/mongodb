@@ -37,7 +37,7 @@ databases.forEach(function(dbName) {
         if (roles && roles.count() > 0) {
             roles.forEach(function(role) {
                 if (!arrayIncludes(mdbBuiltInRoles, role.role)) {
-                    roleCreationCommands.push("db.getSiblingDB(" + dbName + ").createRole({role: \"" + role.role + "\", privileges:"  + JSON.stringify(role.privileges, null, 0) + "}, roles:" + JSON.stringify(role.roles, null, 0) + ");\n");
+                    roleCreationCommands.push("db.getSiblingDB(\"" + dbName + "\").createRole({role: \"" + role.role + "\", privileges:"  + JSON.stringify(role.privileges, null, 0) + "}, roles:" + JSON.stringify(role.roles, null, 0) + ");\n");
                 }
             });
         }
@@ -71,7 +71,7 @@ databases.forEach(function(dbName) {
         }
 
         print("u:" + userDB + " " + currentDB)
-        userCreationCommands.push("db.getSiblingDB(" + userDB + ").createUser({user: \"" + user.user + "\", pwd: \"REPLACE_WITH_PASSWORD\", roles: " + JSON.stringify(roles, null, 0) + "});\n");
+        userCreationCommands.push("db.getSiblingDB(\"" + userDB + "\").createUser({user: \"" + user.user + "\", pwd: \"REPLACE_WITH_PASSWORD\", roles: " + JSON.stringify(roles, null, 0) + "});\n");
     });
 });
 

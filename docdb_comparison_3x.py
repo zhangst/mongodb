@@ -4,12 +4,7 @@
 
 # install pymongo
 # 1)
-# pip install pymongo
-# 2)
-# wget https://files.pythonhosted.org/packages/a3/fe/826348375bfe2d11c96cdc7b7cbabbd84b8b15b62eb33638ee3241fca5f9/pymongo-3.6.1.tar.gz
-# tar -zxvf pymongo-3.6.1.tar.gz
-# cd pymongo-3.6.1
-# python setup.py install
+# pip3 install pymongo
 
 import pymongo
 import time
@@ -65,8 +60,8 @@ def check(src, dst):
     #
     # check metadata 
     #
-    srcDbNames = src.conn.database_names()
-    dstDbNames = dst.conn.database_names()
+    srcDbNames = src.conn.list_database_names()
+    dstDbNames = dst.conn.list_database_names()
     srcDbNames = [db for db in srcDbNames if db not in configure[EXCLUDE_DBS]]
     dstDbNames = [db for db in dstDbNames if db not in configure[EXCLUDE_DBS]]
     if len(srcDbNames) != len(dstDbNames):
@@ -74,7 +69,7 @@ def check(src, dst):
                                                                                               len(dstDbNames),
                                                                                               srcDbNames,
                                                                                               dstDbNames))
-        #return False
+        return False
     else:
         log_info("EQUL => database count equals")
 
@@ -86,7 +81,7 @@ def check(src, dst):
 
         if dstDbNames.count(db) == 0:
             log_error("DIFF => database [%s] only in srcDb" % (db))
-            #return False
+            return False
 
         # db.stats() comparison
         srcDb = src.conn[db] 
@@ -104,13 +99,13 @@ def check(src, dst):
         #     log_info("EQUL => database [%s] stats equals" % db)
 
         # for collections in db
-        srcColls = srcDb.collection_names()
-        dstColls = dstDb.collection_names()
+        srcColls = srcDb.list_collection_names()
+        dstColls = dstDb.list_collection_names()
         srcColls = [coll for coll in srcColls if coll not in configure[EXCLUDE_COLLS] and srcColls.count(coll) > 0]
         dstColls = [coll for coll in dstColls if coll not in configure[EXCLUDE_COLLS] and dstColls.count(coll) > 0]
         if len(srcColls) != len(dstColls):
             log_error("DIFF => database [%s] collections count not equals, src[%s], dst[%s]" % (db, srcColls, dstColls))
-            #return False
+            return False
         else:
             log_info("EQUL => database [%s] collections count equals" % (db))
 
@@ -121,17 +116,20 @@ def check(src, dst):
 
             if dstColls.count(coll) == 0:
                 log_error("DIFF => collection only in source [%s]" % (coll))
-                #return False
+                return False
 
             srcColl = srcDb[coll]
             dstColl = dstDb[coll]
+
+            log_info("compare count for collection [%s]" % coll)
             # comparison collection records number
-            if srcColl.count() != dstColl.count():
+            if srcColl.count_documents({}) != dstColl.count_documents({}):
                 log_error("DIFF => collection [%s] record count not equals" % (coll))
                 #return False
             else:
                 log_info("EQUL => collection [%s] record count equals" % (coll))
 
+            log_info("compare index for collection [%s]" % coll)
             # comparison collection index number
             src_index_length = len(srcColl.index_information())
             dst_index_length = len(dstColl.index_information())
@@ -141,6 +139,7 @@ def check(src, dst):
             else:
                 log_info("EQUL => collection [%s] index number equals" % (coll))
 
+            log_info("compare data sample for collection [%s]" % coll)
             # check sample data
             if not data_comparison(srcColl, dstColl, configure[COMPARISION_MODE]):
                 log_error("DIFF => collection [%s] data comparison not equals" % (coll))
@@ -159,9 +158,9 @@ def data_comparison(srcColl, dstColl, mode):
         return True
     elif mode == "sample":
         # srcColl.count() mus::t equals to dstColl.count()
-        count = configure[COMPARISION_COUNT] if configure[COMPARISION_COUNT] <= srcColl.count() else srcColl.count()
+        count = configure[COMPARISION_COUNT] if configure[COMPARISION_COUNT] <= srcColl.count_documents({}) else srcColl.count_documents({})
     else: # all
-        count = srcColl.count()
+        count = srcColl.count_documents({})
 
     if count == 0:
         return True
@@ -173,25 +172,20 @@ def data_comparison(srcColl, dstColl, mode):
     while count > 0:
         # sample a bounch of docs
 
-        try:
-            docs = srcColl.aggregate([{"$sample": {"size":batch}}], allowDiskUse=True)
-            while docs.alive:
-                doc = docs.next()
-                migrated = dstColl.find_one(doc["_id"])
-                # both origin and migrated bson is Map . so use ==
-                if doc != migrated:
-                    log_error("DIFF => src_record[%s], dst_record[%s]" % (doc, migrated))
-                    return False
+        docs = srcColl.aggregate([{"$sample": {"size":batch}}])
+        while docs.alive:
+            doc = docs.next()
+            migrated = dstColl.find_one(doc["_id"])
+            # both origin and migrated bson is Map . so use ==
+            if doc != migrated:
+                log_error("DIFF => src_record[%s], dst_record[%s]" % (doc, migrated))
+                return False
 
-            total += batch
-            count -= batch
+        total += batch
+        count -= batch
 
-            if total % show_progress == 0:
-                log_info("  ... process %d docs, %.2f %% !" % (total, total * 100.0 / rec_count))
-        except Exception as e:
-            log_error("encounter error:")
-            print(e)
-            return False
+        if total % show_progress == 0:
+            log_info("  ... process %d docs, %.2f %% !" % (total, total * 100.0 / rec_count))
             
 
     return True
